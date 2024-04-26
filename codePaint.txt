@@ -1,0 +1,1012 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace Paint
+{
+    public partial class Form1 : Form
+    {
+
+        private clsDrawObject currentObject = null;
+        Graphics gp;
+        Color myColor;
+        SolidBrush myBrush;
+        Pen myPen;
+
+        bool bLine = false;
+        bool bRectFr = false;
+        bool bRect = false;
+        bool bEllipseFr = false;
+        bool bEllipse = false;
+        bool bPolygon = false;
+       
+        //Danh sách đương thẳng
+
+        List<clsDrawObject> lstObject = new List<clsDrawObject>();
+        // Biến để lưu trữ màu sắc mặc định cho đối tượng mới được vẽ
+        Color defaultColor = Color.Black;
+        bool isPress = false;
+        public Form1()
+        {
+            InitializeComponent();
+            gp = this.ptBox.CreateGraphics();
+            myColor = Color.Black;
+            myPen = new Pen(myColor);
+            myBrush = new SolidBrush(myColor);
+        }
+
+ 
+
+        private void btnLine_Click(object sender, EventArgs e)
+        {
+            this.bLine = true;
+        }
+
+        private void btnRectFr_Click(object sender, EventArgs e)
+        {
+            this.bRectFr = true;
+        }
+
+        private void btnRect_Click(object sender, EventArgs e)
+        {
+            this.bRect = true;
+        }
+
+        private void btnEllipseFr_Click(object sender, EventArgs e)
+        {
+            this.bEllipseFr = true;
+        }
+
+        private void btnEllipse_Click(object sender, EventArgs e)
+        {
+            this.bEllipse= true;
+        }
+
+        private Bitmap bitmap;
+
+        private void ptBox_Paint(object sender, PaintEventArgs e)
+        {
+            // Tạo bitmap tạm thời nếu chưa có
+            if (bitmap == null)
+            {
+                bitmap = new Bitmap(ptBox.Width, ptBox.Height);
+            }
+
+            // Vẽ các đối tượng lên bitmap tạm thời
+            using (Graphics bufferGraphics = Graphics.FromImage(bitmap))
+            {
+                bufferGraphics.Clear(Color.White); // Xóa bitmap trước khi vẽ
+                foreach (clsDrawObject obj in lstObject)
+                {
+                    obj.Draw(bufferGraphics, myPen, myBrush, myColor);
+                    obj.DrawSelection(bufferGraphics); // Vẽ các điểm bao quanh đối tượng khi nó được chọn
+
+                }
+            }
+
+            // Vẽ bitmap lên pictureBox
+            e.Graphics.DrawImage(bitmap, 0, 0);
+        }
+        //Ktra xem đối tượng có đang được kéo không
+        private bool isDragging = false;
+        private Point lastPos;
+        private void ptBox_MouseDown(object sender, MouseEventArgs e)
+        {
+            // Kiểm tra xem người dùng có click chuột phải vào đối tượng đã chọn không
+            foreach (clsDrawObject obj in lstObject)
+            {
+                obj.IsSelected = false;
+            }
+            // Kiểm tra xem người dùng có click vào đối tượng nào không
+            foreach (clsDrawObject obj in lstObject)
+            {
+                if (obj.IsPointInObject(e.Location))
+                {
+                    // Nếu đối tượng nằm trong vùng click, đánh dấu đối tượng này là được chọn và đặt các đối tượng khác là không được chọn
+                    obj.IsSelected = true;
+                    foreach (clsDrawObject otherObj in lstObject)
+                    {
+                        if (otherObj != obj)
+                        {
+                            otherObj.IsSelected = false;
+                        }
+                    }
+                    // Lưu lại đối tượng được chọn và vị trí click cũ
+                    isDragging = true;
+                    currentObject = obj;
+                    lastPos = e.Location;
+                    this.Invalidate();
+                    break;
+                }
+            }
+            // Nếu không click vào đối tượng nào, thêm đối tượng mới vào danh sách
+            if (currentObject == null)
+            {
+
+                if (this.bLine == true)
+                {
+                    clsDrawObject myObj;
+                    myObj = new clsLine();
+                    myObj.p1 = e.Location;
+                    myObj.color = myColor;
+                    this.lstObject.Add(myObj);
+                    currentObject = myObj;
+                }
+                if (this.bRectFr == true)
+                {
+                    clsDrawObject myObj;
+                    myObj = new clsRectangleFr();
+                    myObj.p1 = e.Location;
+                    myObj.color = myColor;
+                    this.lstObject.Add(myObj);
+                    currentObject = myObj;
+                }
+                if (this.bRect == true)
+                {
+                    clsDrawObject myObj;
+                    myObj = new clsRectangle();
+                    myObj.p1 = e.Location;
+                    myObj.color = myColor;
+                    this.lstObject.Add(myObj);
+                    currentObject = myObj;
+                }
+                if (this.bEllipseFr == true)
+                {
+                    clsDrawObject myObj;
+                    myObj = new clsEllipseFr();
+                    myObj.p1 = e.Location;
+                    myObj.color = myColor;
+                    this.lstObject.Add(myObj);
+                    currentObject = myObj;
+                }
+                if (this.bEllipse == true)
+                {
+                    clsDrawObject myObj;
+                    myObj = new clsEllipse();
+                    myObj.p1 = e.Location;
+                    myObj.color = myColor;
+                    this.lstObject.Add(myObj);
+                    currentObject = myObj;
+                }
+            }
+            if (currentObject != null && !currentObject.IsPointInObject(e.Location))
+            {
+                // Nếu đã chọn một đối tượng trước đó, nhưng click vào vùng trống, hủy chọn đối tượng đó và đặt lại trạng thái được chọn cho tất cả các đối tượng khác là false
+                currentObject.IsSelected = false;
+                foreach (clsDrawObject otherObj in lstObject)
+                {
+                    if (otherObj != currentObject)
+                    {
+                        otherObj.IsSelected = false;
+                    }
+                }
+                currentObject = null;
+                lastPos = e.Location;
+                this.Invalidate();
+            }
+        }
+        private void ptBox_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (this.isPress == true)
+            {
+                this.lstObject[this.lstObject.Count - 1].p2 = e.Location;
+                this.ptBox.Refresh();
+            }
+            if (e.Button == MouseButtons.Left && lstObject.Count > 0)
+            {
+                if (this.bLine == true)
+                {
+                    clsLine bLine = (clsLine)lstObject[lstObject.Count - 1];
+                    bLine.p2 = e.Location;
+                    this.ptBox.Invalidate();
+
+                }
+                if (this.bRectFr == true)
+                {
+                    clsRectangleFr bRectFr = (clsRectangleFr)lstObject[lstObject.Count - 1];
+                    bRectFr.p2 = e.Location;
+                    this.ptBox.Invalidate();
+                }
+                if (this.bRect == true)
+                {
+                    clsRectangle bRect = (clsRectangle)lstObject[lstObject.Count - 1];
+                    bRect.p2 = e.Location;
+                    this.ptBox.Invalidate();
+                }
+                if (this.bEllipse == true)
+                {
+                    clsEllipse bEllipse = (clsEllipse)lstObject[lstObject.Count - 1];
+                    bEllipse.p2 = e.Location;
+                    this.ptBox.Invalidate();
+                }
+                if (this.bEllipseFr == true)
+                {
+                    clsEllipseFr bEllipseFr = (clsEllipseFr)lstObject[lstObject.Count - 1];
+                    bEllipseFr.p2 = e.Location;
+                    this.ptBox.Invalidate();
+                }
+            }
+            if (isDragging && currentObject != null)
+            {
+                int deltaX = e.Location.X - lastPos.X;
+                int deltaY = e.Location.Y - lastPos.Y;
+                currentObject.p1.X += deltaX;
+                currentObject.p1.Y += deltaY;
+                currentObject.p2.X += deltaX;
+                currentObject.p2.Y += deltaY;
+                lastPos = e.Location;
+                ptBox.Invalidate();
+            }
+        }
+        private void ptBox_MouseUp(object sender, MouseEventArgs e)
+        {
+            isDragging = false;
+            currentObject = null;
+            this.isPress = false;
+            if (currentObject != null)
+            {
+                currentObject.p2 = e.Location;
+            }
+
+            if (e.Button == MouseButtons.Left && lstObject.Count > 0)
+            {
+                if (this.bLine == true)
+                {
+                    clsLine bLine = (clsLine)lstObject[lstObject.Count - 1];
+                    bLine.p2 = e.Location;
+                    currentObject = bLine;
+                    this.ptBox.Invalidate();
+                }
+                if (this.bRectFr == true)
+                {
+                    clsRectangleFr bRectFr = (clsRectangleFr)lstObject[lstObject.Count - 1];
+                    bRectFr.p2 = e.Location;
+                    currentObject = bRectFr;
+                    this.ptBox.Invalidate();
+                }
+                if (this.bRect == true)
+                {
+                    clsRectangle bRect = (clsRectangle)lstObject[lstObject.Count - 1];
+                    bRect.p2 = e.Location;
+                    currentObject = bRect;
+                    this.ptBox.Invalidate();
+                }
+                if (this.bEllipse == true)
+                {
+                    clsEllipse bEllipse = (clsEllipse)lstObject[lstObject.Count - 1];
+                    bEllipse.p2 = e.Location;
+                    currentObject = bEllipse;
+                    this.ptBox.Invalidate();
+                }
+                if (this.bEllipseFr == true)
+                {
+                    clsEllipseFr bEllipseFr = (clsEllipseFr)lstObject[lstObject.Count - 1];
+                    bEllipseFr.p2 = e.Location;
+                    currentObject = bEllipseFr;
+                    this.ptBox.Invalidate();
+                }
+            }
+            this.ptBox.Refresh();
+            this.bLine = false;
+            this.bEllipseFr = false;
+            this.bEllipse = false;
+            this.bRectFr = false;
+            this.bRect = false;
+            this.currentObject = null;
+        }
+        private void ptBox_MouseClick(object sender, MouseEventArgs e)
+        {
+            // Kiểm tra xem người dùng có click vào đối tượng nào không
+            foreach (clsDrawObject obj in lstObject)
+            {
+                if (obj.IsPointInObject(e.Location))
+                {
+                    currentObject = obj;
+                    this.Invalidate();
+                    break;
+                }
+            }
+        }
+        Control myControl = null;
+        Color selectedColor;
+        private void btnColor_Click(object sender, EventArgs e)
+        {
+            ColorDialog cd = new ColorDialog();
+            cd.AllowFullOpen = true; // cho phép chọn bất kỳ màu nào
+            cd.Color = selectedColor; // màu được chọn trước đó sẽ được chọn mặc định
+            if (cd.ShowDialog() == DialogResult.OK)
+            {
+                myColor = cd.Color;
+                myPen = new Pen(myColor);
+                myBrush = new SolidBrush(myColor);
+                this.ptBox.Refresh();
+                this.ptBox.Invalidate();
+
+            }
+            if (myControl != null)
+            {
+                myControl.BackColor = myColor; // cập nhật màu cho Control nếu có
+                this.ptBox.Refresh();
+                this.ptBox.Invalidate();
+            }
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+            foreach (clsDrawObject obj in lstObject)
+            {
+                obj.Draw(e.Graphics, myPen, myBrush, myColor);
+            }
+        }
+        public abstract class clsDrawObject
+        {
+            public bool IsSelected { get; set; }
+            public Color color;
+            public Point p1;
+            public Point p2;
+            protected float closestDistance;
+            public Point closestPoint;
+            public virtual void Draw(Graphics myGp, Pen myPen, SolidBrush myBrush, Color myColor)
+            {
+                // Use object color instead of main color
+                myPen.Color = color;
+            }
+            public virtual bool IsPointInObject(Point p)
+            {
+                double distFromStart = Math.Sqrt(Math.Pow(p.X - p1.X, 2) + Math.Pow(p.Y - p1.Y, 2));
+                double distFromEnd = Math.Sqrt(Math.Pow(p.X - p2.X, 2) + Math.Pow(p.Y - p2.Y, 2));
+                double lineLength = Math.Sqrt(Math.Pow(p2.X - p1.X, 2) + Math.Pow(p2.Y - p1.Y, 2));
+                double buffer = 3; // Tolerance for checking if point is near the line
+
+                return (distFromStart + distFromEnd >= lineLength - buffer && distFromStart + distFromEnd <= lineLength + buffer);
+            }
+            public abstract void Move(int dx, int dy);
+            public void DrawSelection(Graphics g)
+            {
+                if (IsSelected)
+                {
+                    // Vẽ các điểm trên đường biên của đối tượng
+                    if (this is clsLine)
+                    {
+                        SolidBrush brush = new SolidBrush(Color.DarkRed);
+                        g.FillRectangle(brush, p1.X - 3, p1.Y - 3, 7, 7);
+                        g.FillRectangle(brush, p2.X - 3, p2.Y - 3, 7, 7);
+                        brush.Dispose();
+                    }
+                    else if (this is clsRectangle || this is clsRectangleFr)
+                    {
+
+                        // Với đối tượng hình chữ nhật
+                        SolidBrush brush = new SolidBrush(Color.DarkRed);
+                        g.FillRectangle(brush, p1.X - 3, p1.Y - 3, 7, 7);
+                        g.FillRectangle(brush, p1.X - 3, p2.Y - 3, 7, 7);
+                        g.FillRectangle(brush, p2.X - 3, p1.Y - 3, 7, 7);
+                        g.FillRectangle(brush, p2.X - 3, p2.Y - 3, 7, 7);
+                        g.FillRectangle(brush, (p1.X + p2.X) / 2 - 3, p1.Y - 3, 7, 7); // Điểm giữa bên trên
+                        g.FillRectangle(brush, (p1.X + p2.X) / 2 - 3, p2.Y - 3, 7, 7); // Điểm giữa bên dưới
+                        g.FillRectangle(brush, p1.X - 3, (p1.Y + p2.Y) / 2 - 3, 7, 7); // Điểm giữa bên trái
+                        g.FillRectangle(brush, p2.X - 3, (p1.Y + p2.Y) / 2 - 3, 7, 7); // Điểm giữa bên phải
+                        brush.Dispose();
+                    }
+                    else if (this is clsEllipse || this is clsEllipseFr)
+                    {
+                        // Với đối tượng hình ellipse
+                        SolidBrush brush = new SolidBrush(Color.DarkRed);
+                        g.FillRectangle(brush, p1.X - 3, p1.Y - 3, 7, 7);
+                        g.FillRectangle(brush, p1.X - 3, p2.Y - 3, 7, 7);
+                        g.FillRectangle(brush, p2.X - 3, p1.Y - 3, 7, 7);
+                        g.FillRectangle(brush, p2.X - 3, p2.Y - 3, 7, 7);
+                        g.FillRectangle(brush, (p1.X + p2.X) / 2 - 3, p1.Y - 3, 7, 7); // Điểm giữa bên trên
+                        g.FillRectangle(brush, (p1.X + p2.X) / 2 - 3, p2.Y - 3, 7, 7); // Điểm giữa bên dưới
+                        g.FillRectangle(brush, p1.X - 3, (p1.Y + p2.Y) / 2 - 3, 7, 7); // Điểm giữa bên trái
+                        g.FillRectangle(brush, p2.X - 3, (p1.Y + p2.Y) / 2 - 3, 7, 7); // Điểm giữa bên phải
+                        // Vẽ khung hình chữ nhật bằng nét đứt, với khoảng cách là 10 pixel
+                        Pen dashedPen = new Pen(Color.Black, 1);
+                        dashedPen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                        dashedPen.DashPattern = new float[] { 5.0F, 5.0F };
+                        Rectangle rect = new Rectangle(p1, new Size(p2.X - p1.X, p2.Y - p1.Y));
+                        g.DrawRectangle(dashedPen, rect);
+                        dashedPen.Dispose(); // Hủy bỏ pen để tránh lãng phí tài nguyên hệ thống
+                        brush.Dispose();
+                    } 
+                }
+            }
+            // Phương thức tính khoảng cách từ một điểm đến đối tượng
+            public abstract float DistanceFromPoint(Point p);
+            
+            public Point GetClosestPointOnObject(Point p)
+            {
+                //Tính điểm trên đối tượng gần nhất với điểm p
+                closestDistance = DistanceFromPoint(p);
+                return closestPoint;
+                
+            }
+            public const int RESIZE_PADDING = 5; // Tolerance for selecting resize points
+
+            public virtual int getResizePointIndex(Point p)
+            {
+                Rectangle rect = new Rectangle(p1, new Size(p2.X - p1.X, p2.Y - p1.Y));
+
+                // Check each corner and edge for proximity to point p
+                if (p.X < p1.X + RESIZE_PADDING && p.Y < p1.Y + RESIZE_PADDING)
+                    return 0; // Top-left
+                if (p.X > p2.X - RESIZE_PADDING && p.Y < p1.Y + RESIZE_PADDING)
+                    return 1; // Top-right
+                if (p.X < p1.X + RESIZE_PADDING && p.Y > p2.Y - RESIZE_PADDING)
+                    return 2; // Bottom-left
+                if (p.X > p2.X - RESIZE_PADDING && p.Y > p2.Y - RESIZE_PADDING)
+                    return 3; // Bottom-right
+                if (Math.Abs(p.X - p1.X) < RESIZE_PADDING && p.Y >= p1.Y + RESIZE_PADDING && p.Y <= p2.Y - RESIZE_PADDING)
+                    return 4; // Left
+                if (Math.Abs(p.X - p2.X) < RESIZE_PADDING && p.Y >= p1.Y + RESIZE_PADDING && p.Y <= p2.Y - RESIZE_PADDING)
+                    return 5; // Right
+                if (Math.Abs(p.Y - p1.Y) < RESIZE_PADDING && p.X >= p1.X + RESIZE_PADDING && p.X <= p2.X - RESIZE_PADDING)
+                    return 6; // Top
+                if (Math.Abs(p.Y - p2.Y) < RESIZE_PADDING && p.X >= p1.X + RESIZE_PADDING && p.X <= p2.X - RESIZE_PADDING)
+                    return 7; // Bottom
+
+                return -1; // No resize point found
+            }
+            private const int MIN_SIZE = 10;
+            public virtual void resize(int index, Point p)
+            {
+
+                int x1 = p1.X;
+                int x2 = p2.X;
+                int y1 = p1.Y;
+                int y2 = p2.Y;
+
+                switch (index)
+                {
+                    case 0: // Top-left
+                        x1 = Math.Min(p.X, p2.X - MIN_SIZE);
+                        y2 = Math.Max(p.Y,p1.Y + MIN_SIZE);
+                        break;
+
+                    case 1: // Top-right
+                        x2 = Math.Max(p.X,
+                            p1.X + MIN_SIZE);
+                        y1 = Math.Min(p.Y, p2.Y - MIN_SIZE);
+                        break;
+
+                    case 2: // Bottom-left
+                        x1 = Math.Min(p.X, p2.X - MIN_SIZE);
+                        y2 = Math.Max(p.Y, p1.Y + MIN_SIZE);
+                        break;
+
+                    case 3: // Bottom-right
+                        x2 = Math.Max(p.X, p1.X + MIN_SIZE);
+                        y2 = Math.Max(p.Y, p1.Y + MIN_SIZE);
+                        break;
+
+                    case 4: // Left
+                        x1 = Math.Min(p.X, p2.X - MIN_SIZE);
+                        break;
+
+                    case 5: // Right
+                        x2 = Math.Max(p.X, p1.X + MIN_SIZE);
+                        break;
+
+                    case 6: // Top
+                        y1 = Math.Min(p.Y, p2.Y - MIN_SIZE);
+                        break;
+
+                    case 7: // Bottom
+                        y2 = Math.Max(p.Y, p1.Y + MIN_SIZE);
+                        break;
+
+                    default:
+                        break;
+                }
+
+                p1 = new Point(x1, y1);
+                p2 = new Point(x2, y2);
+            }
+        };
+        
+        public class clsLine : clsDrawObject
+        {
+            public override void Draw(Graphics myGp, Pen myPen, SolidBrush myBrush, Color myColor)
+            {
+                base.Draw(myGp, myPen, myBrush, myColor);
+                myGp.DrawLine(myPen, this.p1, this.p2);
+                // Vẽ đường thẳng
+            }
+            public override bool IsPointInObject(Point p)
+            {
+                // Compute closest point on the line to the given point
+                double dx = p2.X - p1.X;
+                double dy = p2.Y - p1.Y;
+                double t = ((p.X - p1.X) * dx + (p.Y - p1.Y) * dy) / (dx * dx + dy * dy);
+                closestPoint = new Point((int)Math.Round(p1.X + t * dx), (int)Math.Round(p1.Y + t * dy));
+
+                // Check if the closest point is within a certain distance of the given point
+                double dist = Math.Sqrt((p.X - closestPoint.X) * (p.X - closestPoint.X) + (p.Y - closestPoint.Y) * (p.Y - closestPoint.Y));
+                return dist < 3;
+            }
+            public override void Move(int dx, int dy)
+            {
+                p1.X += dx;
+                p1.Y += dy;
+                p2.X += dx;
+                p2.Y += dy;
+            }
+            public override float DistanceFromPoint(Point p)
+            {
+                // Tính khoảng cách từ điểm p đến đường thẳng
+                float dx = p2.X - p1.X;
+                float dy = p2.Y - p1.Y;
+                float t = (dx * (p.X - p1.X) + dy * (p.Y - p1.Y)) / (dx * dx + dy * dy);
+                if (t < 0)
+                {
+                    closestPoint = p1;
+                }
+                else if (t > 1)
+                {
+                    closestPoint = p2;
+                }
+                else
+                {
+                    closestPoint = new Point((int)(p1.X + t * dx), (int)(p1.Y + t * dy));
+                }
+                return (float)Math.Sqrt((closestPoint.X - p.X) * (closestPoint.X - p.X) + (closestPoint.Y - p.Y) * (closestPoint.Y - p.Y));
+            }
+
+        };
+        public class clsRectangleFr : clsDrawObject
+        {
+            public override void Draw(Graphics myGp, Pen myPen, SolidBrush myBrush, Color myColor)
+            {
+                base.Draw(myGp, myPen, myBrush, myColor);
+                int width = Math.Abs(p2.X - p1.X);
+                int height = Math.Abs(p2.Y - p1.Y);
+                if (p2.X < p1.X && p2.Y < p1.Y)
+                {
+                    //myGp.FillRectangle(myBrush, p2.X, p2.Y, width, height);
+                    myGp.DrawRectangle(myPen, p2.X, p2.Y, width, height);
+                }
+                else if (p2.X < p1.X && p2.Y > p1.Y)
+                {
+                    //myGp.FillRectangle(myBrush, p2.X, p1.Y, width, height);
+                    myGp.DrawRectangle(myPen, p2.X, p1.Y, width, height);
+                }
+                else if (p2.X > p1.X && p2.Y < p1.Y)
+                {
+                    //myGp.FillRectangle(myBrush, p1.X, p2.Y, width, height);
+                    myGp.DrawRectangle(myPen, p1.X, p2.Y, width, height);
+                }
+                else
+                {
+                    //myGp.FillRectangle(myBrush, p1.X, p1.Y, width, height);
+                    myGp.DrawRectangle(myPen, p1.X, p1.Y, width, height);
+                }
+               
+            }
+            public override bool IsPointInObject(Point p)
+            {
+                // kiểm tra vị trí của p có nằm trong đối tượng hay không
+                Rectangle rect = new Rectangle(p1, new Size(p2.X - p1.X, p2.Y - p1.Y));
+                return rect.Contains(p);
+            }
+            public override void Move(int dx, int dy)
+            {
+                p1.X += dx;
+                p1.Y += dy;
+                p2.X += dx;
+                p2.Y += dy;
+            }
+            public override float DistanceFromPoint(Point p)
+            {
+                float dx1 = Math.Max(p1.X - p.X, 0);
+                float dx2 = Math.Max(p.X - p2.X, 0);
+                float dx = Math.Max(dx1, dx2);
+
+                float dy1 = Math.Max(p1.Y - p.Y, 0);
+                float dy2 = Math.Max(p.Y - p2.Y, 0);
+                float dy = Math.Max(dy1, dy2);
+                return (float)Math.Sqrt(dx * dx + dy * dy);
+            }
+            public override int getResizePointIndex(Point p)
+            {
+                // tính toán vị trí của điểm được resize
+                Rectangle rect = new Rectangle(p1, new Size(p2.X - p1.X, p2.Y - p1.Y));
+                if (rect.Contains(p))
+                {
+                    if (p.X < p1.X + RESIZE_PADDING)
+                        return 0; // Left
+                    if (p.X >= p2.X - RESIZE_PADDING)
+                        return 2; // Right
+                    if (p.Y < p1.Y + RESIZE_PADDING)
+                        return 1; // Top
+                    if (p.Y >= p2.Y - RESIZE_PADDING)
+                        return 3; // Bottom
+                }
+
+                return -1;
+            }
+            public override void resize(int index, Point p)
+            {
+                // tính toán các thông số mới của hình chữ nhật
+                int x1 = p1.X;
+                int x2 = p2.X;
+                int y1 = p1.Y;
+                int y2 = p2.Y;
+
+                switch (index)
+                {
+                    case 0: // Left
+                        x1 = p.X;
+                        break;
+                    case 1: // Top
+                        y1 = p.Y;
+                        break;
+                    case 2: // Right
+                        x2 = p.X;
+                        break;
+                    case 3: // Bottom
+                        y2 = p.Y;
+                        break;
+                    default:
+                        break;
+                }
+
+                // cập nhật kích thước mới cho hình chữ nhật
+                p1 = new Point(Math.Min(x1, x2), Math.Min(y1, y2));
+                p2 = new Point(Math.Max(x1, x2), Math.Max(y1, y2));
+            }
+        };
+        public class clsRectangle : clsDrawObject
+        {
+            public override void resize(int index, Point p)
+            {
+                // tính toán các thông số mới của hình chữ nhật
+                int x1 = p1.X;
+                int x2 = p2.X;
+                int y1 = p1.Y;
+                int y2 = p2.Y;
+
+                switch (index)
+                {
+                    case 0: // Left
+                        x1 = p.X;
+                        break;
+                    case 1: // Top
+                        y1 = p.Y;
+                        break;
+                    case 2: // Right
+                        x2 = p.X;
+                        break;
+                    case 3: // Bottom
+                        y2 = p.Y;
+                        break;
+                    default:
+                        break;
+                }
+
+                // cập nhật kích thước mới cho hình chữ nhật
+                p1 = new Point(Math.Min(x1, x2), Math.Min(y1, y2));
+                p2 = new Point(Math.Max(x1, x2), Math.Max(y1, y2));
+            }
+            public override int getResizePointIndex(Point p)
+            {
+                // tính toán vị trí của điểm được resize
+                Rectangle rect = new Rectangle(p1, new Size(p2.X - p1.X, p2.Y - p1.Y));
+                if (rect.Contains(p))
+                {
+                    if (p.X < p1.X + RESIZE_PADDING)
+                        return 0; // Left
+                    if (p.X >= p2.X - RESIZE_PADDING)
+                        return 2; // Right
+                    if (p.Y < p1.Y + RESIZE_PADDING)
+                        return 1; // Top
+                    if (p.Y >= p2.Y - RESIZE_PADDING)
+                        return 3; // Bottom
+                }
+
+                return -1;
+            }
+            public override void Draw(Graphics myGp, Pen myPen, SolidBrush myBrush, Color myColor)
+            {
+                base.Draw(myGp, myPen, myBrush, myColor);
+                myBrush = new SolidBrush(color);
+                int width = Math.Abs(p2.X - p1.X);
+                int height = Math.Abs(p2.Y - p1.Y);
+                if (p2.X < p1.X && p2.Y < p1.Y)
+                {
+                    myGp.FillRectangle(myBrush, p2.X, p2.Y, width, height);
+                    myGp.DrawRectangle(myPen, p2.X, p2.Y, width, height);
+                }
+                else if (p2.X < p1.X && p2.Y > p1.Y)
+                {
+                    myGp.FillRectangle(myBrush, p2.X, p1.Y, width, height);
+                    myGp.DrawRectangle(myPen, p2.X, p1.Y, width, height);
+                }
+                else if (p2.X > p1.X && p2.Y < p1.Y)
+                {
+                    myGp.FillRectangle(myBrush, p1.X, p2.Y, width, height);
+                    myGp.DrawRectangle(myPen, p1.X, p2.Y, width, height);
+                }
+                else
+                {
+                    myGp.FillRectangle(myBrush, p1.X, p1.Y, width, height);
+                    myGp.DrawRectangle(myPen, p1.X, p1.Y, width, height);
+                }
+                
+            }
+            public override bool IsPointInObject(Point p)
+            {
+                // kiểm tra vị trí của p có nằm trong đối tượng hay không
+                Rectangle rect = new Rectangle(p1, new Size(p2.X - p1.X, p2.Y - p1.Y));
+                return rect.Contains(p);
+            }
+            public override void Move(int dx, int dy)
+            {
+                p1.X += dx;
+                p1.Y += dy;
+                p2.X += dx;
+                p2.Y += dy;
+            }
+            public override float DistanceFromPoint(Point p)
+            {
+                float dx1 = Math.Max(p1.X - p.X, 0);
+                float dx2 = Math.Max(p.X - p2.X, 0);
+                float dx = Math.Max(dx1, dx2);
+
+                float dy1 = Math.Max(p1.Y - p.Y, 0);
+                float dy2 = Math.Max(p.Y - p2.Y, 0);
+                float dy = Math.Max(dy1, dy2);
+                return (float)Math.Sqrt(dx * dx + dy * dy);
+            }
+        };
+        public class clsEllipseFr : clsDrawObject
+        {
+            public override void resize(int index, Point p)
+            {
+                // tính toán các thông số mới của ellipse
+                int x = p1.X;
+                int y = p1.Y;
+                int width = p2.X - p1.X;
+                int height = p2.Y - p1.Y;
+                switch (index)
+                {
+                    case 0: // Left
+                        x = p.X;
+                        width = p2.X - p.X;
+                        break;
+                    case 1: // Top
+                        y = p.Y;
+                        height = p2.Y - p.Y;
+                        break;
+                    case 2: // Right
+                        width = p.X - p1.X;
+                        break;
+                    case 3: // Bottom
+                        height = p.Y - p1.Y;
+                        break;
+                    default:
+                        break;
+                }
+
+                // cập nhật kích thước mới cho ellipse
+                p1 = new Point(x, y);
+                p2 = new Point(x + width, y + height);
+            }
+            public override int getResizePointIndex(Point p)
+            {
+                // tính toán vị trí của điểm được resize
+                GraphicsPath path = new GraphicsPath();
+                path.AddEllipse(p1.X, p1.Y, p2.X - p1.X, p2.Y - p1.Y);
+                Region region = new Region(path);
+                path.Dispose();
+                if (region.IsVisible(p))
+                {
+                    if (p.X < p1.X + RESIZE_PADDING)
+                        return 0; // Left
+                    if (p.X >= p2.X - RESIZE_PADDING)
+                        return 2; // Right
+                    if (p.Y < p1.Y + RESIZE_PADDING)
+                        return 1; // Top
+                    if (p.Y >= p2.Y - RESIZE_PADDING)
+                        return 3; // Bottom
+                }
+
+                return -1;
+            }
+
+            public override void Draw(Graphics myGp, Pen myPen, SolidBrush myBrush, Color myColor)
+            {
+                
+                base.Draw(myGp, myPen, myBrush, myColor);
+                myGp.DrawEllipse(myPen, this.p1.X, this.p1.Y, this.p2.X - this.p1.X, this.p2.Y - this.p1.Y);
+            }
+            public override bool IsPointInObject(Point p)
+            {
+                // kiểm tra vị trí của p có nằm trong đối tượng hay không
+                GraphicsPath path = new GraphicsPath();
+                path.AddEllipse(p1.X, p1.Y, p2.X - p1.X, p2.Y - p1.Y);
+                bool result = path.IsVisible(p);
+                path.Dispose();
+                return result;
+            }
+            public override void Move(int dx, int dy)
+            {
+                p1.X += dx;
+                p1.Y += dy;
+                p2.X += dx;
+                p2.Y += dy;
+            }
+            public override float DistanceFromPoint(Point p)
+            {
+                float dx = p.X - (p1.X + (p2.X - p1.X) / 2);
+                float dy = p.Y - (p1.Y + (p2.Y - p1.Y) / 2);
+                float rx = (p2.X - p1.X) / 2;
+                float ry = (p2.Y - p1.Y) / 2;
+                return (float)Math.Sqrt((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry));
+            }
+        };
+
+        public class clsEllipse : clsDrawObject
+        {
+            public override void Draw(Graphics myGp, Pen myPen, SolidBrush myBrush, Color myColor)
+            {
+                myBrush = new SolidBrush(color);
+                myGp.FillEllipse(myBrush, this.p1.X, this.p1.Y, this.p2.X - this.p1.X, this.p2.Y - this.p1.Y);
+                base.Draw(myGp, myPen, myBrush, myColor);
+            }
+            public override bool IsPointInObject(Point p)
+            {
+                // kiểm tra vị trí của p có nằm trong đối tượng hay không
+                GraphicsPath path = new GraphicsPath();
+                path.AddEllipse(p1.X, p1.Y, p2.X - p1.X, p2.Y - p1.Y);
+                bool result = path.IsVisible(p);
+                path.Dispose();
+                return result;
+            }
+            public override void Move(int dx, int dy)
+            {
+                p1.X += dx;
+                p1.Y += dy;
+                p2.X += dx;
+                p2.Y += dy;
+            }
+            public override float DistanceFromPoint(Point p)
+            {
+                float dx = p.X - (p1.X + (p2.X - p1.X) / 2);
+                float dy = p.Y - (p1.Y + (p2.Y - p1.Y) / 2);
+                float rx = (p2.X - p1.X) / 2;
+                float ry = (p2.Y - p1.Y) / 2;
+                return (float)Math.Sqrt((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry));
+            }
+            public override void resize(int index, Point p)
+            {
+                // tính toán các thông số mới của ellipse
+                int x = p1.X;
+                int y = p1.Y;
+                int width = p2.X - p1.X;
+                int height = p2.Y - p1.Y;
+                switch (index)
+                {
+                    case 0: // Left
+                        x = p.X;
+                        width = p2.X - p.X;
+                        break;
+                    case 1: // Top
+                        y = p.Y;
+                        height = p2.Y - p.Y;
+                        break;
+                    case 2: // Right
+                        width = p.X - p1.X;
+                        break;
+                    case 3: // Bottom
+                        height = p.Y - p1.Y;
+                        break;
+                    default:
+                        break;
+                }
+
+                // cập nhật kích thước mới cho ellipse
+                p1 = new Point(x, y);
+                p2 = new Point(x + width, y + height);
+            }
+            public override int getResizePointIndex(Point p)
+            {
+                // tính toán vị trí của điểm được resize
+                GraphicsPath path = new GraphicsPath();
+                path.AddEllipse(p1.X, p1.Y, p2.X - p1.X, p2.Y - p1.Y);
+                Region region = new Region(path);
+                path.Dispose();
+                if (region.IsVisible(p))
+                {
+                    if (p.X < p1.X + RESIZE_PADDING)
+                        return 0; // Left
+                    if (p.X >= p2.X - RESIZE_PADDING)
+                        return 2; // Right
+                    if (p.Y < p1.Y + RESIZE_PADDING)
+                        return 1; // Top
+                    if (p.Y >= p2.Y - RESIZE_PADDING)
+                        return 3; // Bottom
+                }
+
+                return -1;
+            }
+
+        };
+        private void btnClear_Click(object sender, EventArgs e)
+        {
+            lstObject.Clear();
+            ptBox.Refresh();
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            gp = this.ptBox.CreateGraphics();
+            gp.Clear(Color.White);
+        }
+
+        private void btnSaveImage_Click(object sender, EventArgs e)
+        {
+            SaveFileDialog sfd = new SaveFileDialog();
+            sfd.Filter = "JPEG (*.jpg;*.jpeg)|*.jpg;*.jpeg|PNG (*.png)|*.png|BMP (*.bmp)|*.bmp";
+            if (sfd.ShowDialog() == DialogResult.OK)
+            {
+                Bitmap bmp = new Bitmap(this.ptBox.Width, this.ptBox.Height);
+                this.ptBox.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+                ImageFormat format = null;
+                string ext = Path.GetExtension(sfd.FileName);
+                switch (ext.ToLower())
+                {
+                    case ".jpg":
+                    case ".jpeg":
+                        format = ImageFormat.Jpeg;
+                        break;
+                    case ".png":
+                        format = ImageFormat.Png;
+                        break;
+                    case ".bmp":
+                        format = ImageFormat.Bmp;
+                        break;
+                }
+                bmp.Save(sfd.FileName, format);
+            }
+        }
+
+        private void btn_Select_Click(object sender, EventArgs e)
+        {
+
+        }
+        private void btn_Delete_Click(object sender, EventArgs e)
+        {
+            // Kiểm tra xem có đối tượng nào được chọn không
+            foreach (clsDrawObject obj in lstObject)
+            {
+                if (obj.IsSelected)
+                {
+                    // Xóa đối tượng khỏi danh sách và vẽ lại ptBox
+                    lstObject.Remove(obj);
+                    ptBox.Invalidate();
+                    break;
+                }
+            }
+        }
+
+        private void btnPencil_Click(object sender, EventArgs e)
+        {
+            
+        }
+
+        private void btnPolygon_Click(object sender, EventArgs e)
+        {
+
+        }
+    }
+}
